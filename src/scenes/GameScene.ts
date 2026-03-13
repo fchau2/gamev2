@@ -3,7 +3,10 @@ import { AudioManager } from "../audio/AudioManager";
 import { type CharacterDefinition, GameState } from "../state/GameState";
 import { createCharacterTexture, createPacketTexture, createTerminalTexture } from "../utils/TextureFactory";
 
-type CarryPacket = Phaser.Physics.Arcade.Image & { packetId: number };
+type CarryPacket = Phaser.Physics.Arcade.Image & {
+  packetId: number;
+  label?: Phaser.GameObjects.Text;
+};
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
@@ -15,6 +18,7 @@ export class GameScene extends Phaser.Scene {
   private currentPacket?: CarryPacket;
   private carriedPacketId: number | null = null;
   private audio!: AudioManager;
+  private wasGrounded = false;
 
   constructor() {
     super("GameScene");
@@ -33,6 +37,7 @@ export class GameScene extends Phaser.Scene {
 
     this.audio = new AudioManager(this);
     this.cameras.main.setBackgroundColor(0x0d1a35);
+    this.cameras.main.setViewport(0, 58, 840, 622);
     this.physics.world.setBounds(0, 0, 2300, 680);
     this.cameras.main.setBounds(0, 0, 2300, 680);
 
@@ -51,7 +56,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.hazard, this.handleDamage, undefined, this);
     this.physics.add.overlap(this.player, this.terminal, this.handleTerminal, undefined, this);
 
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    this.cameras.main.startFollow(this.player, true, 0.05, 0.05);
 
     this.events.on("wake", () => this.scene.restart({ restart: false }));
     this.events.emit("game-state-updated");
@@ -62,64 +67,114 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const moveSpeed = 260;
+    const moveSpeed = 290;
+    const accel = 40;
     const body = this.player.body;
     if (!(body instanceof Phaser.Physics.Arcade.Body)) {
       return;
     }
 
-    if (this.cursors.left.isDown) {
-      this.player.setVelocityX(-moveSpeed);
+    const direction = Number(this.cursors.right.isDown) - Number(this.cursors.left.isDown);
+    const targetVelocity = direction * moveSpeed;
+    const nextVelocity = Phaser.Math.Linear(body.velocity.x, targetVelocity, 0.18);
+    this.player.setVelocityX(Math.abs(nextVelocity) < accel ? 0 : nextVelocity);
+
+    if (direction < 0) {
       this.player.setFlipX(true);
-    } else if (this.cursors.right.isDown) {
-      this.player.setVelocityX(moveSpeed);
+    } else if (direction > 0) {
       this.player.setFlipX(false);
-    } else {
-      this.player.setVelocityX(0);
     }
 
     if (this.cursors.up.isDown && body.blocked.down) {
       this.player.setVelocityY(-520);
       this.audio.playTone("jump", this.state.muted);
+      this.player.setScale(1.52, 1.26);
+      this.tweens.add({ targets: this.player, scaleX: 1.4, scaleY: 1.4, duration: 150, ease: "Sine.out" });
     }
 
+    const grounded = body.blocked.down;
+    if (grounded && !this.wasGrounded) {
+      this.add.circle(this.player.x, this.player.y + 24, 12, 0xb9e7ff, 0.35)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(3);
+      this.player.setScale(1.52, 1.24);
+      this.tweens.add({ targets: this.player, scaleX: 1.4, scaleY: 1.4, duration: 170, ease: "Back.out" });
+    }
+    this.wasGrounded = grounded;
+
+    this.animatePlayer(body);
+
     if (this.currentPacket && this.carriedPacketId !== null) {
-      this.currentPacket.setPosition(this.player.x, this.player.y - 44);
+      this.currentPacket.setPosition(this.player.x + (this.player.flipX ? -28 : 28), this.player.y - 34);
+      this.currentPacket.setRotation(this.currentPacket.rotation + 0.03);
+      this.emitDigitalParticles(this.currentPacket.x, this.currentPacket.y, 0x8ee8ff, 1);
+    }
+  }
+
+  private animatePlayer(body: Phaser.Physics.Arcade.Body): void {
+    if (!body.blocked.down) {
+      this.player.setTint(0xd8f3ff);
+      return;
+    }
+
+    this.player.clearTint();
+    const running = Math.abs(body.velocity.x) > 25;
+    if (running) {
+      const wobble = Math.sin(this.time.now * 0.022) * 0.05;
+      this.player.setAngle(wobble * 12);
+    } else {
+      this.player.setAngle(0);
+      this.player.y += Math.sin(this.time.now * 0.005) * 0.02;
     }
   }
 
   private drawBackground(): void {
     const sky = this.add.graphics();
-    sky.fillGradientStyle(0x102248, 0x102248, 0x1b386b, 0x1b386b, 1);
+    sky.fillGradientStyle(0x08152f, 0x08152f, 0x15325d, 0x15325d, 1);
     sky.fillRect(0, 0, 2300, 680);
 
-    for (let i = 0; i < 30; i += 1) {
-      this.add.circle(Phaser.Math.Between(30, 2270), Phaser.Math.Between(30, 460), Phaser.Math.Between(4, 12), 0x75c8ff, 0.14)
-        .setBlendMode(Phaser.BlendModes.ADD);
+    for (let i = 0; i < 24; i += 1) {
+      this.add.rectangle(100 * i + Phaser.Math.Between(-30, 30), 420 + Phaser.Math.Between(-120, 80), Phaser.Math.Between(26, 42), Phaser.Math.Between(80, 180), 0x1a2f57, 0.45)
+        .setStrokeStyle(1, 0x7bc6ff, 0.15);
     }
 
-    for (let i = 0; i < 14; i += 1) {
-      this.add.rectangle(170 * i + 40, 520, 120, 6, 0x66a0de, 0.22).setAngle(-8 + i);
+    for (let i = 0; i < 34; i += 1) {
+      const line = this.add.rectangle(Phaser.Math.Between(20, 2280), Phaser.Math.Between(80, 640), Phaser.Math.Between(100, 260), 2, 0x73bdff, 0.16).setAngle(Phaser.Math.Between(-15, 15));
+      this.tweens.add({ targets: line, alpha: { from: 0.08, to: 0.28 }, duration: Phaser.Math.Between(900, 1600), yoyo: true, repeat: -1 });
+    }
+
+    for (let i = 0; i < 60; i += 1) {
+      const particle = this.add.circle(Phaser.Math.Between(10, 2290), Phaser.Math.Between(40, 660), Phaser.Math.Between(1, 3), 0x89d8ff, 0.35).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: particle, y: particle.y - Phaser.Math.Between(12, 40), alpha: 0.04, duration: Phaser.Math.Between(2000, 4200), yoyo: true, repeat: -1 });
+    }
+
+    for (let i = 0; i < 12; i += 1) {
+      const signal = this.add.circle(180 * i + 80, 260 + Phaser.Math.Between(-40, 50), 4, 0xa8ecff, 0.5).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: signal, x: signal.x + Phaser.Math.Between(120, 220), duration: Phaser.Math.Between(2600, 3800), repeat: -1, yoyo: true, ease: "Sine.inOut" });
     }
   }
 
   private createPlatforms(): void {
     this.platforms = this.physics.add.staticGroup();
 
-    const createGround = (x: number, y: number, width: number): void => {
-      const block = this.add.rectangle(x, y, width, 36, 0x244983, 1).setStrokeStyle(2, 0x8ed8ff, 0.35);
+    const createGround = (x: number, y: number, width: number, style: number): void => {
+      const block = this.add.rectangle(x, y, width, 36, style, 1).setStrokeStyle(2, 0x90daff, 0.45);
+      this.add.rectangle(x, y - 11, width - 8, 4, 0x91ecff, 0.35).setBlendMode(Phaser.BlendModes.ADD);
       this.physics.add.existing(block, true);
       this.platforms.add(block as Phaser.GameObjects.GameObject);
     };
 
-    createGround(240, 642, 480);
-    createGround(760, 642, 430);
-    createGround(1260, 642, 440);
-    createGround(1740, 642, 370);
-    createGround(2110, 642, 320);
+    createGround(240, 642, 480, 0x244983);
+    createGround(760, 642, 430, 0x2a4d7f);
+    createGround(1260, 642, 440, 0x294570);
+    createGround(1740, 642, 370, 0x214160);
+    createGround(2110, 642, 320, 0x244983);
 
-    createGround(1020, 500, 180);
-    createGround(1500, 470, 180);
+    createGround(1020, 500, 180, 0x305f96);
+    createGround(1500, 470, 180, 0x305f96);
+
+    this.add.text(1020, 457, "Router", { fontFamily: "Inter, sans-serif", fontSize: "14px", color: "#cfe9ff" }).setOrigin(0.5);
+    this.add.text(1500, 427, "Router", { fontFamily: "Inter, sans-serif", fontSize: "14px", color: "#cfe9ff" }).setOrigin(0.5);
   }
 
   private createPlayer(character: CharacterDefinition): void {
@@ -127,19 +182,13 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(120, 560, texture).setScale(1.4);
     this.player.setCollideWorldBounds(true);
     this.player.setBounce(0.04);
+
     const playerBody = this.player.body;
     if (playerBody instanceof Phaser.Physics.Arcade.Body) {
       playerBody.setSize(28, 40).setOffset(10, 10);
     }
 
-    this.tweens.add({
-      targets: this.player,
-      duration: 1200,
-      alpha: { from: 0.87, to: 1 },
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut"
-    });
+    this.add.circle(this.player.x, this.player.y - 8, 40, character.accent, 0.17).setBlendMode(Phaser.BlendModes.ADD);
   }
 
   private createTerminal(): void {
@@ -156,6 +205,9 @@ export class GameScene extends Phaser.Scene {
       fontSize: "18px",
       color: "#d2eeff"
     }).setOrigin(0.5);
+
+    const pulse = this.add.circle(2160, 574, 46, 0x83e5ff, 0.14).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: pulse, scale: 1.2, alpha: 0.04, duration: 900, yoyo: true, repeat: -1 });
   }
 
   private spawnNextPacket(): void {
@@ -183,15 +235,10 @@ export class GameScene extends Phaser.Scene {
       color: "#0d1c39",
       fontStyle: "700"
     }).setOrigin(0.5);
+    packet.label = label;
 
-    this.tweens.add({
-      targets: [packet, label],
-      y: `-=${10}`,
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut"
-    });
+    this.tweens.add({ targets: [packet, label], y: `-=${10}`, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    this.tweens.add({ targets: packet, angle: 360, duration: 4600, repeat: -1, ease: "Linear" });
 
     this.physics.add.collider(packet, this.platforms);
     this.physics.add.overlap(this.player, packet, () => {
@@ -206,6 +253,7 @@ export class GameScene extends Phaser.Scene {
       }
       packet.setVelocity(0, 0);
       label.destroy();
+      this.emitDigitalParticles(packet.x, packet.y, 0xd5fbff, 18);
       this.audio.playTone("pickup", this.state.muted);
       this.events.emit("packet-picked", this.carriedPacketId);
     });
@@ -216,7 +264,7 @@ export class GameScene extends Phaser.Scene {
   private createHazard(): void {
     const packetTexture = createPacketTexture(this);
     this.hazard = this.physics.add.image(1320, 616, packetTexture);
-    this.hazard.setDisplaySize(48, 18);
+    this.hazard.setDisplaySize(56, 24);
     this.hazard.setTint(0xff607a);
     this.hazard.setImmovable(true);
     const hazardBody = this.hazard.body;
@@ -224,8 +272,12 @@ export class GameScene extends Phaser.Scene {
       hazardBody.setAllowGravity(false);
     }
 
+    const eyeLeft = this.add.circle(this.hazard.x - 8, this.hazard.y - 2, 2, 0xffffff, 0.8);
+    const eyeRight = this.add.circle(this.hazard.x + 8, this.hazard.y - 2, 2, 0xffffff, 0.8);
+    this.tweens.add({ targets: [eyeLeft, eyeRight], alpha: 0.12, duration: 220, yoyo: true, repeat: -1, repeatDelay: 1100 });
+
     this.tweens.add({
-      targets: this.hazard,
+      targets: [this.hazard, eyeLeft, eyeRight],
       x: 1450,
       duration: 2000,
       yoyo: true,
@@ -264,6 +316,9 @@ export class GameScene extends Phaser.Scene {
     this.currentPacket = undefined;
     this.carriedPacketId = null;
 
+    const beam = this.add.rectangle(this.terminal.x, this.terminal.y - 60, 10, 130, 0x9ff3ff, 0.34).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: beam, scaleX: 3, alpha: 0, duration: 300, onComplete: () => beam.destroy() });
+
     this.events.emit("packet-delivered", deliveredId);
     this.events.emit("game-state-updated");
 
@@ -277,5 +332,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.time.delayedCall(350, () => this.spawnNextPacket());
+  }
+
+  private emitDigitalParticles(x: number, y: number, color: number, amount: number): void {
+    for (let i = 0; i < amount; i += 1) {
+      const p = this.add.circle(x, y, Phaser.Math.Between(1, 3), color, 0.85).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: p,
+        x: x + Phaser.Math.Between(-34, 34),
+        y: y + Phaser.Math.Between(-28, 28),
+        alpha: 0,
+        scale: 0.3,
+        duration: Phaser.Math.Between(240, 520),
+        onComplete: () => p.destroy()
+      });
+    }
   }
 }
