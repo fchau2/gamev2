@@ -10,7 +10,12 @@ export class AudioManager {
       return;
     }
 
-    const context = this.scene.sound.context;
+    const soundManager = this.scene.sound;
+    if (!("context" in soundManager)) {
+      return;
+    }
+
+    const context = soundManager.context;
     const now = context.currentTime;
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();

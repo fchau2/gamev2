@@ -7,10 +7,10 @@ type CarryPacket = Phaser.Physics.Arcade.Image & { packetId: number };
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private player!: Phaser.Physics.Arcade.Sprite;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
-  private hazard!: Phaser.Physics.Arcade.Sprite;
+  private hazard!: Phaser.Physics.Arcade.Image;
   private terminal!: Phaser.Physics.Arcade.Image;
   private currentPacket?: CarryPacket;
   private carriedPacketId: number | null = null;
@@ -43,7 +43,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnNextPacket();
     this.createHazard();
 
-    this.cursors = this.input.keyboard.createCursorKeys();
+    this.cursors = this.input.keyboard?.createCursorKeys();
 
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.collider(this.currentPacket ?? this.player, this.platforms);
@@ -58,12 +58,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(): void {
-    if (!this.player?.active) {
+    if (!this.player?.active || !this.cursors) {
       return;
     }
 
     const moveSpeed = 260;
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const body = this.player.body;
+    if (!(body instanceof Phaser.Physics.Arcade.Body)) {
+      return;
+    }
 
     if (this.cursors.left.isDown) {
       this.player.setVelocityX(-moveSpeed);
@@ -140,7 +143,7 @@ export class GameScene extends Phaser.Scene {
     const terminalTexture = createTerminalTexture(this);
     this.terminal = this.physics.add.image(2160, 580, terminalTexture);
     this.terminal.setImmovable(true);
-    this.terminal.body.setAllowGravity(false);
+    this.terminal.setAllowGravity(false);
 
     this.add.text(2160, 528, "Destination Terminal", {
       fontFamily: "Inter, sans-serif",
@@ -191,7 +194,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.carriedPacketId = packet.packetId;
       this.currentPacket = packet;
-      packet.body.setAllowGravity(false);
+      packet.setAllowGravity(false);
       packet.setVelocity(0, 0);
       label.destroy();
       this.audio.playTone("pickup", this.state.muted);
@@ -202,12 +205,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHazard(): void {
-    const dangerBlock = this.add.rectangle(1320, 616, 48, 18, 0xff607a, 1).setStrokeStyle(2, 0xffafbc, 0.8);
-    this.physics.add.existing(dangerBlock);
-
-    this.hazard = dangerBlock as unknown as Phaser.Physics.Arcade.Sprite;
-    this.hazard.body.setAllowGravity(false);
+    const packetTexture = createPacketTexture(this);
+    this.hazard = this.physics.add.image(1320, 616, packetTexture);
+    this.hazard.setDisplaySize(48, 18);
+    this.hazard.setTint(0xff607a);
     this.hazard.setImmovable(true);
+    this.hazard.setAllowGravity(false);
 
     this.tweens.add({
       targets: this.hazard,

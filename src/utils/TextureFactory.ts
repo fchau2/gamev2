@@ -7,7 +7,7 @@ export function createCharacterTexture(scene: Phaser.Scene, character: Character
     return key;
   }
 
-  const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+  const graphics = scene.add.graphics();
   graphics.fillStyle(character.color, 1);
   graphics.fillRoundedRect(4, 8, 40, 44, 14);
   graphics.fillStyle(character.accent, 1);
@@ -29,7 +29,7 @@ export function createPacketTexture(scene: Phaser.Scene): string {
     return key;
   }
 
-  const g = scene.make.graphics({ x: 0, y: 0, add: false });
+  const g = scene.add.graphics();
   g.fillStyle(0x7dd3ff, 1);
   g.fillRoundedRect(2, 2, 28, 28, 6);
   g.lineStyle(2, 0xdaf6ff, 0.9);
@@ -48,7 +48,7 @@ export function createTerminalTexture(scene: Phaser.Scene): string {
     return key;
   }
 
-  const g = scene.make.graphics({ x: 0, y: 0, add: false });
+  const g = scene.add.graphics();
   g.fillStyle(0x223868, 1);
   g.fillRoundedRect(0, 8, 72, 56, 10);
   g.fillStyle(0x74e8ff, 0.85);
