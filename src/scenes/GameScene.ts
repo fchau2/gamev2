@@ -127,7 +127,10 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(120, 560, texture).setScale(1.4);
     this.player.setCollideWorldBounds(true);
     this.player.setBounce(0.04);
-    this.player.body.setSize(28, 40).setOffset(10, 10);
+    const playerBody = this.player.body;
+    if (playerBody instanceof Phaser.Physics.Arcade.Body) {
+      playerBody.setSize(28, 40).setOffset(10, 10);
+    }
 
     this.tweens.add({
       targets: this.player,
@@ -143,7 +146,10 @@ export class GameScene extends Phaser.Scene {
     const terminalTexture = createTerminalTexture(this);
     this.terminal = this.physics.add.image(2160, 580, terminalTexture);
     this.terminal.setImmovable(true);
-    this.terminal.setAllowGravity(false);
+    const terminalBody = this.terminal.body;
+    if (terminalBody instanceof Phaser.Physics.Arcade.Body) {
+      terminalBody.setAllowGravity(false);
+    }
 
     this.add.text(2160, 528, "Destination Terminal", {
       fontFamily: "Inter, sans-serif",
@@ -194,7 +200,10 @@ export class GameScene extends Phaser.Scene {
       }
       this.carriedPacketId = packet.packetId;
       this.currentPacket = packet;
-      packet.setAllowGravity(false);
+      const packetBody = packet.body;
+      if (packetBody instanceof Phaser.Physics.Arcade.Body) {
+        packetBody.setAllowGravity(false);
+      }
       packet.setVelocity(0, 0);
       label.destroy();
       this.audio.playTone("pickup", this.state.muted);
@@ -210,7 +219,10 @@ export class GameScene extends Phaser.Scene {
     this.hazard.setDisplaySize(48, 18);
     this.hazard.setTint(0xff607a);
     this.hazard.setImmovable(true);
-    this.hazard.setAllowGravity(false);
+    const hazardBody = this.hazard.body;
+    if (hazardBody instanceof Phaser.Physics.Arcade.Body) {
+      hazardBody.setAllowGravity(false);
+    }
 
     this.tweens.add({
       targets: this.hazard,
